@@ -716,9 +716,9 @@ setInterval(() => {
 }, 1000);
 
 /* ---------- 3D EARTH MAP ---------- */
-let earthScene, earthCamera, earthRenderer, earthMesh, earthAtmosphere, earthMarker;
+let earthScene, earthCamera, earthRenderer, earthMesh, earthAtmosphere, earthMarker, cloudMesh;
 let isDragging = false, previousMousePosition = { x: 0, y: 0 };
-let autoRotate = false; // Default to no auto rotation
+let autoRotate = false; // Always false now
 let currentLat = 0, currentLon = 0;
 
 function latLonToVector3(lat, lon, radius) {
@@ -734,6 +734,29 @@ function init3DEarth() {
     const canvas = document.getElementById('earthCanvas');
     if (!canvas) return;
     
+    const cities = [
+        { name: 'New York', lat: 40.7128, lon: -74.0060 },
+        { name: 'London', lat: 51.5074, lon: -0.1278 },
+        { name: 'Paris', lat: 48.8566, lon: 2.3522 },
+        { name: 'Tokyo', lat: 35.6762, lon: 139.6503 },
+        { name: 'Sydney', lat: -33.8688, lon: 151.2093 },
+        { name: 'Cairo', lat: 30.0444, lon: 31.2357 },
+        { name: 'Rio de Janeiro', lat: -22.9068, lon: -43.1729 },
+        { name: 'Moscow', lat: 55.7558, lon: 37.6173 },
+        { name: 'Beijing', lat: 39.9042, lon: 116.4074 },
+    ];
+
+    function addCityMarkers() {
+        const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+        cities.forEach(city => {
+            const markerGeometry = new THREE.SphereGeometry(0.02, 16, 16);
+            const cityMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+            const position = latLonToVector3(city.lat, city.lon, 1.5);
+            cityMarker.position.copy(position);
+            earthScene.add(cityMarker);
+        });
+    }
+
     const container = canvas.parentElement;
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -748,15 +771,61 @@ function init3DEarth() {
     
     // Earth sphere with day/night texture
     const earthGeometry = new THREE.SphereGeometry(1.5, 64, 64);
-    const earthMaterial = new THREE.MeshPhongMaterial({
-        map: new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'),
-        bumpMap: new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-topology.png'),
-        bumpScale: 0.05,
-        specular: new THREE.Color(0x333333),
-        shininess: 5
+    const earthMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            dayTexture: { value: new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg') },
+            nightTexture: { value: new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-night.jpg') },
+            sunDirection: { value: new THREE.Vector3(0.5, 0, 0.5) }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            varying vec3 vNormal;
+            void main() {
+                vUv = uv;
+                vNormal = normalize(normalMatrix * normal);
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D dayTexture;
+            uniform sampler2D nightTexture;
+            uniform vec3 sunDirection;
+            varying vec2 vUv;
+            varying vec3 vNormal;
+
+            void main() {
+                vec3 dayColor = texture2D(dayTexture, vUv).rgb;
+                vec3 nightColor = texture2D(nightTexture, vUv).rgb;
+                
+                float intensity = dot(vNormal, normalize(sunDirection));
+                vec3 finalColor = mix(nightColor, dayColor, smoothstep(-0.2, 0.2, intensity));
+                
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `
     });
     earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
     earthScene.add(earthMesh);
+
+    // Clouds
+    const cloudGeometry = new THREE.SphereGeometry(1.52, 64, 64);
+    const cloudMaterial = new THREE.MeshPhongMaterial({
+        map: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_clouds_2048.png'),
+        transparent: true,
+        opacity: 0.4
+    });
+    cloudMesh = new THREE.Mesh(cloudGeometry, cloudMaterial);
+    earthScene.add(cloudMesh);
+    
+    // Country & State Borders
+    const borderGeometry = new THREE.SphereGeometry(1.51, 64, 64);
+    const borderMaterial = new THREE.MeshBasicMaterial({
+        map: new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-topology.png'),
+        transparent: true,
+        opacity: 0.8
+    });
+    const borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
+    earthScene.add(borderMesh);
     
     // Atmosphere glow
     const atmosphereGeometry = new THREE.SphereGeometry(1.6, 64, 64);
@@ -809,20 +878,8 @@ function init3DEarth() {
     const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
     earthScene.add(ambientLight);
     
-    // Stars
-    const starsGeometry = new THREE.BufferGeometry();
-    const starPositions = [];
-    for (let i = 0; i < 2000; i++) {
-        const x = (Math.random() - 0.5) * 100;
-        const y = (Math.random() - 0.5) * 100;
-        const z = (Math.random() - 0.5) * 100;
-        starPositions.push(x, y, z);
-    }
-    starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
-    const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5 });
-    const stars = new THREE.Points(starsGeometry, starsMaterial);
-    earthScene.add(stars);
-    
+    addCityMarkers();
+
     // Get user location and place marker
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition((position) => {
@@ -858,15 +915,38 @@ function init3DEarth() {
         
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(x, y), earthCamera);
-        const intersects = raycaster.intersectObject(earthMesh);
+        const intersects = raycaster.intersectObjects(earthScene.children);
         
         if (intersects.length > 0) {
-            const point = intersects[0].point;
-            const latLon = vector3ToLatLon(point);
-            currentLat = latLon.lat;
-            currentLon = latLon.lon;
-            updateMarker(currentLat, currentLon);
-            showCoordinates(currentLat, currentLon);
+            const clickedObject = intersects[0].object;
+            // Check for city marker (golden sphere)
+            if (clickedObject.geometry.type === 'SphereGeometry' && clickedObject.material.color && clickedObject.material.color.getHex() === 0xffd700) {
+                const city = cities.find(c => {
+                    const cityPosition = latLonToVector3(c.lat, c.lon, 1.5);
+                    return cityPosition.distanceTo(clickedObject.position) < 0.1;
+                });
+                if (city) {
+                    showCoordinates(city.lat, city.lon, city.name);
+                }
+            } else {
+                // Find point on Earth sphere
+                const earthIntersect = intersects.find(intersect => intersect.object === earthMesh);
+                if (earthIntersect) {
+                    const point = earthIntersect.point;
+                    const latLon = vector3ToLatLon(point);
+                    currentLat = latLon.lat;
+                    currentLon = latLon.lon;
+                    updateMarker(currentLat, currentLon);
+                    
+                    // Show loading in label
+                    showCoordinates(currentLat, currentLon, 'Loading location...');
+                    
+                    // Reverse geocode to get city/country name
+                    reverseGeocode(currentLat, currentLon).then(name => {
+                        showCoordinates(currentLat, currentLon, name);
+                    });
+                }
+            }
         }
     });
     
@@ -926,21 +1006,48 @@ function updateMarker(lat, lon) {
         earthMesh.rotation.y = startRotation.y + (targetRotation.y - startRotation.y) * progress;
     }, 16);
     
-    autoRotate = false;
-    setTimeout(() => autoRotate = true, 5000);
+    // Auto-rotation disabled
 }
 
-function showCoordinates(lat, lon) {
+let labelTimeout;
+function showCoordinates(lat, lon, name = null) {
     const label = document.getElementById('mapLabel');
     if (label) {
         label.style.display = 'block';
-        label.textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
-        setTimeout(() => { label.style.display = 'none'; }, 3000);
+        if (name) {
+            label.textContent = name;
+        } else {
+            label.textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+        }
+        
+        // Clear previous timeout to prevent premature hiding
+        if (labelTimeout) clearTimeout(labelTimeout);
+        labelTimeout = setTimeout(() => { label.style.display = 'none'; }, 6000);
+    }
+}
+
+async function reverseGeocode(lat, lon) {
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`);
+        const data = await response.json();
+        if (data && data.display_name) {
+            const parts = data.display_name.split(',');
+            // Return first few parts (e.g. City, Region, Country)
+            return parts.slice(0, 3).join(', ');
+        }
+        return `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+    } catch (error) {
+        console.error('Reverse geocode error:', error);
+        return `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
     }
 }
 
 function animateEarth() {
     requestAnimationFrame(animateEarth);
+    if (autoRotate) {
+        earthMesh.rotation.y += 0.0005;
+        cloudMesh.rotation.y += 0.0006;
+    }
     if (earthRenderer && earthScene && earthCamera) {
         earthRenderer.render(earthScene, earthCamera);
     }
