@@ -114,10 +114,11 @@ h1 {
 }
 
 #timeZoneSelect {
+    /* color: white; */
     padding: 5px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text);
+    background: rgba(243, 240, 240, 0.885);
+    /* color: var(--text);    */
     border: 1px solid rgba(255, 255, 255, 0.3);
     font-size: 0.9rem;
 }
@@ -143,6 +144,109 @@ h1 {
     height: 320px;
     position: relative;
     margin: 30px 0;
+}
+
+/* ---------- MODAL STYLES ---------- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.modal-content {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    width: 95%;
+    max-width: 1200px;
+    border-radius: 24px;
+    padding: 24px;
+    position: relative;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    animation: modalAppear 0.3s ease-out;
+}
+
+.modal-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    align-items: center;
+}
+
+.modal-toolbar input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 10px 15px;
+    color: white;
+    font-size: 0.95rem;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.modal-toolbar input:focus {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent);
+}
+
+.modal-toolbar button {
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.my-location-btn {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: white !important;
+}
+
+.my-location-btn:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+}
+
+@keyframes modalAppear {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-header h2 {
+    margin: 0;
+}
+
+.close-modal {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.close-modal:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: rotate(90deg);
 }
 
 .zoom-controls {
@@ -711,12 +815,19 @@ button.stop-button:hover {
 
 #mapContainer {
     border: 2px solid rgba(56, 189, 248, 0.3);
+    width: 100%;
+    max-width: 100%;
+    height: 400px;
+    margin: 15px auto;
+    padding: 0;
+    border-radius: 12px;
+    overflow: hidden;
 }
 
-.leaflet-container {
+/* .leaflet-container {
     border-radius: 12px;
     font-family: inherit;
-}
+} */
 
 #mapLabel {
     z-index: 20;

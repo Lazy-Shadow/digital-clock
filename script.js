@@ -106,18 +106,34 @@ function fetchIPLocation() {
 
 /* ---------- SECTION NAVIGATION ---------- */
 function showSection(sectionId, event) {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.menu button').forEach(b => b.classList.remove('active'));
-  document.getElementById(sectionId).classList.add('active');
-  if (event && event.target) event.target.classList.add('active');
+document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+document.querySelectorAll('.menu button').forEach(b => b.classList.remove('active'));
+document.getElementById(sectionId).classList.add('active');
+    if (event && event.target) event.target.classList.add('active');
   
-  if (sectionId === 'weather' && !weatherLoaded) {
+    if (sectionId === 'weather' && !weatherLoaded) {
     autoDetectLocation();
   }
-  if (sectionId === 'map' && !mapLoaded) {
-    getMapLocation();
-  }
 }
+
+function openMapModal() {
+    document.getElementById('mapModal').style.display = 'flex';
+    if (!mapLoaded) {
+        getMapLocation();
+    }
+}
+
+function closeMapModal() {
+    document.getElementById('mapModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('mapModal');
+    if (event.target === modal) {
+        closeMapModal();
+    }
+});
 
 /* ---------- ANALOG CLOCK ---------- */
 function updateAnalogClock() {
@@ -130,13 +146,13 @@ function setClockNumbers() {
 
 /* ---------- DIGITAL CLOCK ---------- */
 function updateClockDisplay() {
-  const now = new Date();
-  const options = currentTimeZone === 'local' ? {} : { timeZone: currentTimeZone };
-  const time = now.toLocaleTimeString([], options);
-  const date = now.toLocaleDateString([], options);
-
-  document.getElementById('clock').innerText = time;
-  document.getElementById('dateDisplay').innerText = date;
+    const now = new Date();
+    const options = currentTimeZone === 'local' ? {} : { timeZone: currentTimeZone };
+    const time = now.toLocaleTimeString([], options);
+    const date = now.toLocaleDateString([], options);
+    
+    document.getElementById('clock').innerText = time;
+    document.getElementById('dateDisplay').innerText = date;
 }
 
 const timeZoneCoords = {
@@ -632,17 +648,15 @@ function getWeatherIcon(code) {
 }
 
 /* ---------- MAP ---------- */
-let map = null;
-let marker = null;
 let mapLoaded = false;
 
-function getMapLocation() {
+function getMapLocation(force = false) {
     if (!navigator.geolocation) {
         showMapError('Geolocation is not supported by your browser');
         return;
     }
     
-    if (mapLoaded) return;
+    if (mapLoaded && !force) return;
     
     document.getElementById('mapLoading').style.display = 'block';
     document.getElementById('mapError').style.display = 'none';
@@ -660,6 +674,34 @@ function getMapLocation() {
     );
 }
 
+async function searchMapLocation() {
+    const query = document.getElementById('mapSearchInput').value;
+    if (!query) return;
+    
+    document.getElementById('mapLoading').style.display = 'block';
+    document.getElementById('mapLoading').textContent = 'Searching...';
+    document.getElementById('mapError').style.display = 'none';
+    document.getElementById('mapContainer').style.display = 'none';
+    
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+            initMap(parseFloat(data[0].lat), parseFloat(data[0].lon));
+        } else {
+            document.getElementById('mapLoading').style.display = 'none';
+            showMapError('Location not found. Try a different search.');
+        }
+    } catch (error) {
+        console.error('Search error:', error);
+        document.getElementById('mapLoading').style.display = 'none';
+        showMapError('An error occurred while searching.');
+    } finally {
+        document.getElementById('mapLoading').textContent = 'Detecting location and loading map...';
+    }
+}
+
 function showMapError(msg) {
     const errorEl = document.getElementById('mapError');
     errorEl.textContent = msg;
@@ -672,24 +714,22 @@ function initMap(lat, lon) {
     document.getElementById('mapError').style.display = 'none';
     document.getElementById('mapContainer').style.display = 'block';
     
-    if (map) {
-        map.remove();
-    }
-    
-    map = L.map('map').setView([lat, lon], 14);
-    
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-    
-    if (marker) {
-        map.removeLayer(marker);
-    }
-    
-    marker = L.marker([lat, lon]).addTo(map)
-        .bindPopup('You are here')
-        .openPopup();
+    const query = `${lat},${lon}`;
+    const mapUrl = `https://maps.google.com/maps?q=${encodeURIComponent(query)}&hl=en&z=15&output=embed`;
+    document.getElementById('mapFrame').src = mapUrl;
 }
+
+// Add enter key listener for map search
+document.addEventListener('DOMContentLoaded', () => {
+    const mapSearchInput = document.getElementById('mapSearchInput');
+    if (mapSearchInput) {
+        mapSearchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                searchMapLocation();
+            }
+        });
+    }
+});
 
 /* ---------- CHECK ALARMS ---------- */
 setInterval(() => {
